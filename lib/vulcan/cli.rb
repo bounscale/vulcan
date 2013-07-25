@@ -68,14 +68,22 @@ if no COMMAND is specified, a sensible default will be chosen for you
       end
 
       request = Net::HTTP::Post::Multipart.new "/make", make_options
-
       if source_is_url
         print "Initializing build... "
       else
         print "Uploading source package... "
       end
 
-      response = Net::HTTP.start(server.host, server.port) do |http|
+      proxy_env = ENV['http_proxy'] || ENV['HTTP_PROXY']
+      http_class = if proxy_env
+        print " << Use #{proxy_env} >> "
+        proxy = URI.parse(proxy_env)
+        Net::HTTP::Proxy(proxy.host, proxy.port)
+      else
+        Net::HTTP
+      end
+
+      response = http_class.start(server.host, server.port) do |http|
         http.request(request) do |response|
           response.read_body do |chunk|
             unless chunk == 0.chr + "\n"
@@ -94,6 +102,7 @@ if no COMMAND is specified, a sensible default will be chosen for you
 
       File.open(output, "w") do |output|
         begin
+          RestClient.proxy = proxy_env if proxy_env
           output.print RestClient.get(output_url)
         rescue Exception => ex
           puts ex.inspect
